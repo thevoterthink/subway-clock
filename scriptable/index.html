@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ian's Heart Widget</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 24px 16px; background: #000; color: #fff;
+         font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  p, li { color: #c8c8c8; line-height: 1.5; }
+  ol { padding-left: 20px; }
+  button { font: inherit; font-size: 18px; font-weight: 700; padding: 14px 22px; border: 0;
+           border-radius: 12px; background: #BF2B45; color: #fff; width: 100%; margin: 12px 0; }
+  textarea { width: 100%; height: 240px; box-sizing: border-box; background: #111; color: #ddd;
+             border: 1px solid #333; border-radius: 8px; font: 12px/1.4 ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Leslie to Ian’s Heart: Scriptable widget</h1>
+  <p>Muni 5 / 5R countdown for the Home Screen and Lock Screen.</p>
+  <button id="copy">Copy script</button>
+  <ol>
+    <li>Install <b>Scriptable</b> from the App Store.</li>
+    <li>Open Scriptable, tap <b>+</b>, paste, and name it <b>Ian’s Heart</b>.</li>
+    <li>Tap ▶︎ to run it once. Enter your 511 key (saved in the Keychain), then preview the sizes.</li>
+    <li>Add a <b>Scriptable</b> widget to the Home Screen or Lock Screen. Long-press it → <b>Edit Widget</b> → Script: <b>Ian’s Heart</b>.</li>
+  </ol>
+  <textarea id="code" readonly>Loading…</textarea>
+</main>
+<script>
+  const code = document.getElementById("code");
+  fetch("ians-heart-widget.js", { cache: "no-store" }).then(r => r.text()).then(t => code.value = t);
+  document.getElementById("copy").onclick = async e => {
+    try { await navigator.clipboard.writeText(code.value); }
+    catch (_) { code.select(); document.execCommand("copy"); }
+    e.target.textContent = "Copied ✓";
+  };
+</script>
+</body>
+</html>
