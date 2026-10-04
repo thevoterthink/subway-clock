@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Muni Clock</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; overflow: hidden;
+    background: #000; color: #fff;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 700;
+  }
+  body { display: flex; flex-direction: column; height: 100vh; }
+
+  .top {
+    height: 11vh; flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 3vw; background: #1c1c1c; border-bottom: 0.4vh solid #333;
+  }
+  .station { font-size: 6.4vh; letter-spacing: -0.02em; }
+  .clock { font-size: 6.4vh; font-variant-numeric: tabular-nums; }
+  .clock .tz { font-size: 0.5em; color: #9b9b9b; margin-left: 0.35em; }
+
+  .section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .label {
+    height: 6vh; flex: none; display: flex; align-items: flex-end; padding: 0 3vw 0.8vh;
+    font-size: 3.4vh; color: #9b9b9b; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .row {
+    flex: 1; min-height: 0; display: flex; align-items: center; gap: 2.2vw;
+    padding: 0 3vw; border-top: 0.25vh solid #262626;
+  }
+  .rank { width: 4.5vh; flex: none; font-size: 4.6vh; color: #b5b5b5; text-align: right; }
+  .bullet {
+    width: 8vh; height: 8vh; flex: none; display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; font-size: 5.6vh; line-height: 1; letter-spacing: -0.04em;
+  }
+  .bullet.express {
+    width: 9.4vh; height: 9.4vh; margin: 0 -0.7vh; border-radius: 0; font-size: 5vh;
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  }
+  .bullet.long { font-size: 3.4vh; }
+  .dest { flex: 1; min-width: 0; font-size: 6vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mins { flex: none; font-size: 6.4vh; font-variant-numeric: tabular-nums; text-align: right; }
+  .mins small { font-size: 0.62em; margin-left: 0.25em; }
+  .empty { color: #6e6e6e; font-size: 4.4vh; }
+
+  .foot {
+    height: 4vh; flex: none; display: flex; align-items: center; justify-content: flex-end;
+    padding: 0 3vw; font-size: 1.9vh; color: #5c5c5c; font-weight: 400;
+  }
+  body.idle, body.idle * { cursor: none; }
+
+  .alert {
+    flex: none; height: 12.5vh; display: none; align-items: center; gap: 2vw;
+    padding: 0 3vw; background: #141414; border-bottom: 0.25vh solid #262626;
+  }
+  .alert.show { display: flex; }
+  .alert .pill {
+    flex: none; padding: 0.5vh 1.1vh; border-radius: 0.6vh; font-size: 2.3vh;
+    text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+  }
+  .alert .pill.live { background: #ffc233; color: #000; }
+  .alert .pill.planned { border: 0.3vh solid #8a8a8a; color: #d0d0d0; }
+  .alert .text {
+    flex: 1; min-width: 0; font-size: 3.3vh; line-height: 1.3; font-weight: 400;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .alert .count { flex: none; font-size: 2.2vh; color: #6e6e6e; font-weight: 400; }
+  .mini {
+    display: inline-flex; align-items: center; justify-content: center; vertical-align: -0.12em;
+    width: 1.15em; height: 1.15em; border-radius: 50%; font-size: 0.9em; font-weight: 700; line-height: 1;
+  }
+  .delayed {
+    flex: none; font-size: 2.6vh; color: #ffc233; border: 0.25vh solid #ffc233;
+    border-radius: 0.6vh; padding: 0.3vh 0.9vh; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .foot.warn { justify-content: center; background: #4a3300; color: #ffc233; font-weight: 700; font-size: 2.3vh; }
+  .delayed.sched { color: #8a8a8a; border-color: #5a5a5a; }
+  .setup { margin: auto; width: min(90vw, 110vh); padding: 4vh 0; font-weight: 400; }
+  .setup p { font-size: 3.6vh; margin-bottom: 2vh; }
+  .setup .hint { font-size: 2.4vh; color: #8a8a8a; }
+  .setup input, .setup button {
+    font: inherit; font-size: 3.4vh; padding: 1.4vh 1.8vh; border-radius: 0.8vh; border: 0.3vh solid #444;
+  }
+  .setup input { width: 100%; background: #111; color: #fff; margin-bottom: 2vh; }
+  .setup button { background: #fff; color: #000; font-weight: 700; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div class="top"><div class="station" id="station"></div><div class="clock" id="clock"></div></div>
+  <div class="alert" id="alert"><div class="pill" id="alert-pill"></div><div class="text" id="alert-text"></div><div class="count" id="alert-count"></div></div>
+  <div id="sections" style="flex:1; display:flex; flex-direction:column; min-height:0"></div>
+  <div class="foot" id="foot">loading…</div>
+
+<script>
+  // ======================== SETTINGS: edit these ========================
+  // Stop codes are Muni's 5-digit stop IDs (the number on the stop sign).
+  // 511.org allows 60 requests/hour per key: each refresh costs one request per
+  // stop, so 2 stops every 150 s = 48/hour, plus 4/hour for notices.
+  const CONFIG = {
+    stationName: "McAllister St",
+    refreshSeconds: 150,
+    alertsRefreshSeconds: 900,
+    showAlerts: true,
+    sections: [
+      { label: "Baker · Downtown",      stopCode: "15385", lines: ["5"],       rows: 4 },
+      { label: "Divisadero · Downtown", stopCode: "15390", lines: ["5", "5R"], rows: 4 },
+    ],
+  };
+  // =======================================================================
+
+  // Official Muni route colors from the SFMTA GTFS: route -> [background, text].
+  const MUNI_COLORS = {"1":["#005B95","#FFFFFF"],"12":["#005B95","#FFFFFF"],"14":["#005B95","#FFFFFF"],"14R":["#BF2B45","#FFFFFF"],"15":["#005B95","#FFFFFF"],"18":["#005B95","#FFFFFF"],"19":["#005B95","#FFFFFF"],"1X":["#BF2B45","#FFFFFF"],"2":["#005B95","#FFFFFF"],"22":["#005B95","#FFFFFF"],"23":["#005B95","#FFFFFF"],"24":["#005B95","#FFFFFF"],"25":["#005B95","#FFFFFF"],"27":["#005B95","#FFFFFF"],"28":["#005B95","#FFFFFF"],"28R":["#BF2B45","#FFFFFF"],"29":["#005B95","#FFFFFF"],"30":["#005B95","#FFFFFF"],"30X":["#005B95","#FFFFFF"],"31":["#005B95","#FFFFFF"],"33":["#005B95","#FFFFFF"],"35":["#005B95","#FFFFFF"],"36":["#005B95","#FFFFFF"],"37":["#005B95","#FFFFFF"],"38":["#005B95","#FFFFFF"],"38R":["#BF2B45","#FFFFFF"],"39":["#005B95","#FFFFFF"],"43":["#005B95","#FFFFFF"],"44":["#005B95","#FFFFFF"],"45":["#005B95","#FFFFFF"],"48":["#005B95","#FFFFFF"],"49":["#005B95","#FFFFFF"],"5":["#005B95","#FFFFFF"],"52":["#005B95","#FFFFFF"],"54":["#005B95","#FFFFFF"],"55":["#005B95","#FFFFFF"],"56":["#005B95","#FFFFFF"],"57":["#005B95","#FFFFFF"],"58":["#005B95","#FFFFFF"],"5R":["#BF2B45","#FFFFFF"],"6":["#005B95","#FFFFFF"],"66":["#005B95","#FFFFFF"],"67":["#005B95","#FFFFFF"],"7":["#005B95","#FFFFFF"],"714":["#005B95","#FFFFFF"],"8":["#005B95","#FFFFFF"],"8AX":["#005B95","#FFFFFF"],"8BX":["#005B95","#FFFFFF"],"9":["#005B95","#FFFFFF"],"90":["#666666","#FFFFFF"],"91":["#666666","#FFFFFF"],"9R":["#BF2B45","#FFFFFF"],"CA":["#B49A36","#000000"],"F":["#B49A36","#000000"],"FBUS":["#B49A36","#000000"],"J":["#A96614","#FFFFFF"],"K":["#437C93","#FFFFFF"],"KBUS":["#437C93","#FFFFFF"],"L":["#942D83","#FFFFFF"],"LOWL":["#666666","#FFFFFF"],"M":["#008547","#FFFFFF"],"N":["#005B95","#FFFFFF"],"NBUS":["#005B95","#FFFFFF"],"NOWL":["#666666","#FFFFFF"],"PH":["#B49A36","#000000"],"PM":["#B49A36","#000000"],"T":["#BF2B45","#FFFFFF"],"TBUS":["#BF2B45","#FFFFFF"]};
+  const COLORS = {}, DARK_TEXT = new Set();
+  for (const [r, [bg, fg]] of Object.entries(MUNI_COLORS)) {
+    COLORS[r] = bg;
+    if (fg === "#000000") DARK_TEXT.add(r);
+  }
+  // Predictions refresh every 150 s, so allow a couple of missed refreshes before warning.
+  const STALE_SECONDS = 420;
+
+  const API = "https://api.511.org/transit/";
+  const KEY_STORE = "subwayClock.511key";
+
+  // The 511 key never lives in the published code. Open the page once as
+  // .../sf/#key=YOUR_KEY and it is saved on this device only.
+  function loadKey() {
+    const m = location.hash.match(/key=([0-9A-Za-z-]{20,})/);
+    if (m) {
+      try { localStorage.setItem(KEY_STORE, m[1]); } catch (e) {}
+      history.replaceState(null, "", location.pathname + location.search);  // hide it from the address bar
+      return m[1];
+    }
+    try { return localStorage.getItem(KEY_STORE); } catch (e) { return null; }
+  }
+  let apiKey = loadKey();
+
+  const results = {};   // stopCode -> arrivals
+  const stopOkAt = {};  // stopCode -> epoch seconds of last good fetch
+  let alerts = [];
+  let statusMsg = null; // shown in the footer when something needs attention
+  let backoffUntil = 0;
+
+  class HttpError extends Error { constructor(status) { super("HTTP " + status); this.status = status; } }
+
+  async function get511(path, params) {
+    const qs = new URLSearchParams({ agency: "SF", format: "json", ...params, api_key: apiKey });
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 20000);
+    try {
+      const r = await fetch(API + path + "?" + qs, { cache: "no-store", signal: ctl.signal });
+      if (!r.ok) throw new HttpError(r.status);
+      return JSON.parse((await r.text()).replace(/^﻿/, ""));  // 511 prefixes its JSON with a BOM
+    } finally { clearTimeout(timer); }
+  }
+
+  function handleError(e, what) {
+    console.warn(what, e);
+    if (e.status === 401 || e.status === 403) {
+      statusMsg = "511 rejected the API key — reopen the page with #key=YOUR_KEY";
+    } else if (e.status === 429) {
+      backoffUntil = Date.now() + 10 * 60 * 1000;
+      statusMsg = "511 hourly request limit reached — pausing updates for 10 min";
+    }
+  }
+
+  function parseVisits(json, sec) {
+    let d = (json.ServiceDelivery || {}).StopMonitoringDelivery || {};
+    if (Array.isArray(d)) d = d[0] || {};
+    const out = [];
+    for (const v of d.MonitoredStopVisit || []) {
+      const j = v.MonitoredVehicleJourney || {};
+      const line = j.LineRef || "";
+      if (sec.lines.length && !sec.lines.includes(line)) continue;
+      const c = j.MonitoredCall || {};
+      const expected = c.ExpectedArrivalTime || c.ExpectedDepartureTime;
+      const when = expected || c.AimedArrivalTime || c.AimedDepartureTime;
+      if (!when) continue;
+      out.push({
+        route: line,
+        express: false,
+        dest: c.DestinationDisplay || (j.DestinationName || "").replace(/\s+Bay\s+\w+$/, ""),
+        time: Date.parse(when) / 1000,
+        // No live GPS prediction for this bus, only the timetable.
+        scheduled: !expected || j.Monitored === false,
+      });
+    }
+    return out;
+  }
+
+  async function pollStops() {
+    if (!apiKey || document.hidden || Date.now() < backoffUntil) return;
+    if (Date.now() >= backoffUntil && statusMsg && statusMsg.includes("limit")) statusMsg = null;
+    for (const sec of CONFIG.sections) {  // one at a time: gentler on the rate limit
+      try {
+        results[sec.stopCode] = parseVisits(await get511("StopMonitoring", { stopcode: sec.stopCode }), sec);
+        stopOkAt[sec.stopCode] = Date.now() / 1000;
+        if (statusMsg && statusMsg.includes("key")) statusMsg = null;
+      } catch (e) { handleError(e, "stop " + sec.stopCode); }
+    }
+    render();
+  }
+
+  function relevantAlerts(json, now) {
+    const stops = new Set(CONFIG.sections.map(s => s.stopCode));
+    const lines = new Set(CONFIG.sections.flatMap(s => s.lines));
+    const out = [], seen = new Set();
+    for (const ent of json.Entities || []) {
+      const a = ent.Alert;
+      if (!a) continue;
+      const periods = (a.ActivePeriods && a.ActivePeriods.length) ? a.ActivePeriods : [{}];
+      if (!periods.some(p => (p.Start || 0) <= now && now <= (p.End || Infinity))) continue;
+      const ies = a.InformedEntities || [];
+      // Our stop (on our routes), or a whole-route notice for one of our routes.
+      const hit = ies.some(ie => ie.StopId ? stops.has(ie.StopId) && (!ie.RouteId || lines.has(ie.RouteId))
+                                           : ie.RouteId && lines.has(ie.RouteId));
+      if (!hit) continue;
+      const tr = ((a.HeaderText || {}).Translations || []).find(t => !t.Language || t.Language === "en");
+      const text = ((tr && tr.Text) || "").trim();
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      out.push({ type: "Muni notice", planned: true, text,
+                 routes: [...new Set(ies.map(ie => ie.RouteId).filter(r => r && lines.has(r)))] });
+    }
+    return out;
+  }
+
+  async function pollAlerts() {
+    if (!apiKey || !CONFIG.showAlerts || document.hidden || Date.now() < backoffUntil) return;
+    try { alerts = relevantAlerts(await get511("servicealerts", {}), Date.now() / 1000); }
+    catch (e) { handleError(e, "alerts"); }
+    render();
+  }
+
+  function poll() { pollStops(); pollAlerts(); }
+
+  // Same shape the laptop server's /api/arrivals returns, so the drawing code is shared.
+  let data = null;
+  function buildData() {
+    const now = Date.now() / 1000;
+    const okTimes = CONFIG.sections.map(s => stopOkAt[s.stopCode]);
+    data = {
+      station_name: CONFIG.stationName,
+      last_update: okTimes.every(Boolean) ? Math.min(...okTimes) : null,
+      alerts,
+      sections: CONFIG.sections.map(sec => ({
+        label: sec.label, rows: sec.rows, lines: sec.lines,
+        arrivals: (results[sec.stopCode] || []).filter(a => a.time >= now).sort((x, y) => x.time - y.time),
+      })),
+    };
+  }
+
+  // First visit on a device: ask for the 511 key (saved locally, never published).
+  function showSetup() {
+    document.getElementById("station").textContent = CONFIG.stationName;
+    const root = document.getElementById("sections");
+    const box = el("div", "setup");
+    box.appendChild(el("p", null, "Enter your 511.org API key to start the clock."));
+    box.appendChild(el("p", "hint", "It's saved on this device only. You can also open this page once as …/sf/#key=YOUR_KEY"));
+    const input = el("input");
+    input.placeholder = "511 API key";
+    input.autocomplete = "off";
+    const btn = el("button", null, "Start");
+    btn.onclick = () => {
+      const k = input.value.trim();
+      if (!k) return;
+      apiKey = k;
+      try { localStorage.setItem(KEY_STORE, k); } catch (e) {}
+      location.reload();
+    };
+    box.appendChild(input);
+    box.appendChild(btn);
+    root.replaceChildren(box);
+    document.getElementById("foot").textContent = "";
+  }
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function colorize(e, route) {
+    e.style.background = COLORS[route] || "#808183";
+    e.style.color = DARK_TEXT.has(route) ? "#000" : "#fff";
+  }
+
+  // Alert text uses [A], [1] etc. for lines; draw those as small bullets.
+  function alertText(text) {
+    const frag = document.createDocumentFragment();
+    text.split(/(\[[A-Z0-9]{1,3}\])/).forEach(part => {
+      const m = part.match(/^\[([A-Z0-9]{1,3})\]$/);
+      if (m) {
+        const route = m[1] === "SIR" ? "SIR" : m[1].replace(/^(GS|FS|H)$/, "S");
+        const b = el("span", "mini", route);
+        colorize(b, route);
+        frag.appendChild(b);
+      } else if (part) {
+        frag.appendChild(document.createTextNode(part));
+      }
+    });
+    return frag;
+  }
+
+  let alertIdx = 0;
+  function renderAlert() {
+    const bar = document.getElementById("alert");
+    const alerts = (data && data.alerts) || [];
+    if (!alerts.length) { bar.classList.remove("show"); return; }
+    const a = alerts[alertIdx % alerts.length];
+    const pill = document.getElementById("alert-pill");
+    pill.className = "pill " + (a.planned ? "planned" : "live");
+    pill.textContent = a.type.replace(/^Planned - /, "Planned: ");
+    document.getElementById("alert-text").replaceChildren(alertText(a.text));
+    document.getElementById("alert-count").textContent =
+      alerts.length > 1 ? `${(alertIdx % alerts.length) + 1}/${alerts.length}` : "";
+    bar.classList.add("show");
+  }
+
+  function bullet(a) {
+    const b = el("div", "bullet" + (a.express ? " express" : "") + (a.route.length > 1 ? " long" : ""), a.route);
+    colorize(b, a.route);
+    return b;
+  }
+
+  function render() {
+    if (!apiKey) return showSetup();
+    buildData();
+    const now = Date.now() / 1000;
+    renderAlert();
+    const root = document.getElementById("sections");
+    root.replaceChildren();
+    if (!data) return;
+    document.getElementById("station").textContent = data.station_name;
+
+    for (const sec of data.sections) {
+      const s = el("div", "section");
+      s.appendChild(el("div", "label", sec.label));
+      const trains = sec.arrivals.filter(a => a.time >= now).slice(0, sec.rows);
+      for (let i = 0; i < sec.rows; i++) {
+        const row = el("div", "row");
+        const a = trains[i];
+        if (a) {
+          row.appendChild(el("div", "rank", String(i + 1)));
+          row.appendChild(bullet(a));
+          row.appendChild(el("div", "dest", a.dest));
+          if (a.scheduled) row.appendChild(el("div", "delayed sched", "Sched"));
+          const m = el("div", "mins", String(Math.floor((a.time - now) / 60)));
+          m.appendChild(el("small", null, "min"));
+          row.appendChild(m);
+        } else if (i === 0 && data.last_update) {
+          const noticed = (data.alerts || []).some(n => n.routes.some(r => (sec.lines || []).includes(r)));
+          row.appendChild(el("div", "empty", noticed ? "No buses stopping here — see notice above" : "No buses scheduled"));
+        }
+        s.appendChild(row);
+      }
+      root.appendChild(s);
+    }
+
+    const foot = document.getElementById("foot");
+    const age = data.last_update ? Math.round(now - data.last_update) : null;
+    if (statusMsg) {
+      foot.className = "foot warn";
+      foot.textContent = statusMsg;
+    } else if (!navigator.onLine) {
+      foot.className = "foot warn";
+      foot.textContent = "No internet connection — times may be wrong";
+    } else if (age === null || age > STALE_SECONDS) {
+      foot.className = "foot warn";
+      foot.textContent = age === null
+        ? "Waiting for live data from 511…"
+        : `No fresh Muni data for ${Math.floor(age / 60)} min — times may be stale`;
+    } else {
+      foot.className = "foot";
+      foot.textContent = `updated ${age}s ago`;
+    }
+  }
+
+  function tickClock() {
+    // Always San Francisco time, whatever time zone the device is set to.
+    const clock = document.getElementById("clock");
+    clock.textContent = new Date().toLocaleTimeString("en-US",
+      { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" });
+    clock.appendChild(el("small", "tz", "PT"));
+  }
+
+  // Keep the display awake while the clock is open (where the browser supports it).
+  async function keepAwake() {
+    try { if (navigator.wakeLock) await navigator.wakeLock.request("screen"); } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) keepAwake(); });
+  keepAwake();
+
+  // Hide the cursor after 3 s without mouse movement.
+  let idleTimer;
+  function wake() {
+    document.body.classList.remove("idle");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => document.body.classList.add("idle"), 3000);
+  }
+  document.addEventListener("mousemove", wake);
+  wake();
+
+  // Tap/click anywhere to go full screen (phones and TV browsers).
+  document.addEventListener("click", e => {
+    if (e.target.closest(".setup")) return;
+    const d = document.documentElement;
+    if (!document.fullscreenElement && d.requestFullscreen) d.requestFullscreen().catch(() => {});
+  });
+  // Don't spend 511 requests while the page is hidden; catch up when it's shown again.
+  document.addEventListener("visibilitychange", () => {
+    const oldest = Math.min(...CONFIG.sections.map(s => stopOkAt[s.stopCode] || 0));
+    if (!document.hidden && Date.now() / 1000 - oldest > CONFIG.refreshSeconds) pollStops();
+  });
+
+  tickClock();
+  render();
+  poll();
+  setInterval(tickClock, 1000);
+  setInterval(() => { alertIdx++; renderAlert(); }, 12000);  // rotate notices
+  setInterval(render, 5000);                              // recompute minutes
+  setInterval(pollStops, CONFIG.refreshSeconds * 1000);   // predictions from 511
+  setInterval(pollAlerts, CONFIG.alertsRefreshSeconds * 1000);
+  setTimeout(() => location.reload(), 6 * 60 * 60 * 1000);
+</script>
+</body>
+</html>

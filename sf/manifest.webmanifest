@@ -1,0 +1,9 @@
+{
+  "name": "Muni Clock",
+  "short_name": "Muni Clock",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000"
+}
